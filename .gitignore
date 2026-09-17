@@ -12,3 +12,4 @@ frontend/.vite/
 .DS_Store
 *.log
 celerybeat-schedule*
+docs/PROJECT_GUIDE.md

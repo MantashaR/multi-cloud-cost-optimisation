@@ -4,18 +4,29 @@ and keeping them readable here matters more than DRY-ing across providers.
 """
 
 HEADER = """# Right-sizing remediation
-# Account : {account_name} ({provider})
-# Resource: {resource_id}
-# Reason  : {rationale}
-# Estimated monthly savings: ${savings:.2f} ({savings_pct:.0f}%)
+# Account  : {account_name} ({provider})
+# Resource : {resource_id}
+# Priority : {priority}
+# Reason   : {rationale}
+# Estimated savings: ${monthly_savings:.2f}/mo (${annual_savings:.2f}/yr, {savings_pct:.0f}%)
 """
 
 
-def _aws_downsize(rec) -> str:
+def _header_for(rec) -> str:
     return HEADER.format(
-        account_name=rec.account.name, provider="aws", resource_id=rec.resource_id,
-        rationale=rec.rationale, savings=rec.estimated_monthly_savings, savings_pct=rec.estimated_savings_pct,
-    ) + f"""
+        account_name=rec.account.name,
+        provider=rec.account.provider,
+        resource_id=rec.resource_id,
+        priority=rec.get_priority_display(),
+        rationale=rec.rationale,
+        monthly_savings=rec.estimated_monthly_savings,
+        annual_savings=rec.estimated_annual_savings,
+        savings_pct=rec.estimated_savings_pct,
+    )
+
+
+def _aws_downsize(rec) -> str:
+    return _header_for(rec) + f"""
 resource "aws_instance" "{_safe_name(rec.resource_id)}" {{
   # NOTE: import the existing instance before applying:
   #   terraform import aws_instance.{_safe_name(rec.resource_id)} <instance-id>
@@ -32,10 +43,7 @@ resource "aws_instance" "{_safe_name(rec.resource_id)}" {{
 
 
 def _azure_downsize(rec) -> str:
-    return HEADER.format(
-        account_name=rec.account.name, provider="azure", resource_id=rec.resource_id,
-        rationale=rec.rationale, savings=rec.estimated_monthly_savings, savings_pct=rec.estimated_savings_pct,
-    ) + f"""
+    return _header_for(rec) + f"""
 resource "azurerm_linux_virtual_machine" "{_safe_name(rec.resource_id)}" {{
   # NOTE: import the existing VM before applying:
   #   terraform import azurerm_linux_virtual_machine.{_safe_name(rec.resource_id)} <resource-id>
@@ -52,10 +60,7 @@ resource "azurerm_linux_virtual_machine" "{_safe_name(rec.resource_id)}" {{
 
 
 def _gcp_downsize(rec) -> str:
-    return HEADER.format(
-        account_name=rec.account.name, provider="gcp", resource_id=rec.resource_id,
-        rationale=rec.rationale, savings=rec.estimated_monthly_savings, savings_pct=rec.estimated_savings_pct,
-    ) + f"""
+    return _header_for(rec) + f"""
 resource "google_compute_instance" "{_safe_name(rec.resource_id)}" {{
   # NOTE: import the existing instance before applying:
   #   terraform import google_compute_instance.{_safe_name(rec.resource_id)} <project>/<zone>/<instance-name>
@@ -81,10 +86,7 @@ _TERMINATE_TEMPLATE = """
 
 
 def _terminate(rec, resource_address: str) -> str:
-    return HEADER.format(
-        account_name=rec.account.name, provider=rec.account.provider, resource_id=rec.resource_id,
-        rationale=rec.rationale, savings=rec.estimated_monthly_savings, savings_pct=rec.estimated_savings_pct,
-    ) + _TERMINATE_TEMPLATE.format(
+    return _header_for(rec) + _TERMINATE_TEMPLATE.format(
         utilization=rec.avg_utilization_pct or 0.0,
         threshold=100.0,
         resource_address=resource_address,

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { dismissRecommendation, getDashboard } from "./api";
+import { getDashboard, updateRecommendationStatus } from "./api";
 import AnomalyTable from "./components/AnomalyTable";
 import CostTrendChart from "./components/CostTrendChart";
 import ForecastChart from "./components/ForecastChart";
+import KeyInsights from "./components/KeyInsights";
+import MonthlyCostSpikesTable from "./components/MonthlyCostSpikesTable";
 import RecommendationsTable from "./components/RecommendationsTable";
 import RunAnalysisButton from "./components/RunAnalysisButton";
+import SpendByProviderChart from "./components/SpendByProviderChart";
 import SummaryCards from "./components/SummaryCards";
 
 export default function App() {
@@ -25,8 +28,8 @@ export default function App() {
     refresh();
   }, [refresh]);
 
-  const handleDismiss = async (id) => {
-    await dismissRecommendation(id);
+  const handleUpdateStatus = async (id, status) => {
+    await updateRecommendationStatus(id, status);
     refresh();
   };
 
@@ -44,6 +47,8 @@ export default function App() {
 
       {data && (
         <>
+          <KeyInsights data={data} />
+
           <SummaryCards data={data} />
 
           <div className="grid-2">
@@ -52,19 +57,33 @@ export default function App() {
               <CostTrendChart data={data.daily_trend} />
             </div>
             <div className="card section">
-              <div className="section-title">Cost forecast (Prophet)</div>
-              <ForecastChart trend={data.daily_trend} forecast={data.forecast_series} />
+              <div className="section-title">Spend share by provider (30d)</div>
+              <SpendByProviderChart data={data.spend_by_provider} />
             </div>
           </div>
 
           <div className="card section">
-            <div className="section-title">Cost anomalies</div>
+            <div className="section-title">Cost forecast (Prophet)</div>
+            <ForecastChart trend={data.daily_trend} forecast={data.forecast_series} />
+          </div>
+
+          <div className="card section">
+            <div className="section-title">Monthly cost spikes by service</div>
+            <p className="section-subtitle">
+              Rolls up every detected anomaly by month and service, so you can see at a
+              glance which service drove the overspend, and by how much.
+            </p>
+            <MonthlyCostSpikesTable data={data.monthly_cost_spikes} />
+          </div>
+
+          <div className="card section">
+            <div className="section-title">Cost anomalies (detail)</div>
             <AnomalyTable anomalies={data.anomalies} />
           </div>
 
           <div className="card section">
             <div className="section-title">Right-sizing recommendations</div>
-            <RecommendationsTable recommendations={data.recommendations} onDismiss={handleDismiss} />
+            <RecommendationsTable recommendations={data.recommendations} onUpdateStatus={handleUpdateStatus} />
           </div>
         </>
       )}

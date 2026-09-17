@@ -5,11 +5,6 @@ intelligence layer that ingests AWS / Azure / GCP billing data, detects cost
 anomalies, forecasts spend, and auto-generates Terraform right-sizing
 remediation scripts.
 
-> **New to this project?** Read **[`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md)**
-> for a full plain-English walkthrough of every design decision, how each
-> piece works, the real bugs found and fixed while building it, and how to
-> explain any part of it to someone else (professor, teammate, recruiter).
-
 Runs entirely on your laptop with **Docker Compose** and needs **no cloud
 account** — every connector defaults to a realistic synthetic data generator.
 Real AWS/Azure/GCP SDK integration code is included and can be switched on

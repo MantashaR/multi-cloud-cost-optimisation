@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
-from django.db.models import Sum
+from django.db.models import Case, Count, F, IntegerField, Min, Sum, When
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -169,18 +170,62 @@ def _dashboard_view(request):
         many=True,
     ).data
 
+    # Monthly cost-spike summary: turns the day-by-day anomaly list into the
+    # question a FinOps stakeholder actually asks -- "which service drove the
+    # overspend this month, and by how much" -- by rolling every anomaly's
+    # excess-over-baseline up by (month, provider, service).
+    severity_rank = Case(
+        When(severity=Anomaly.Severity.CRITICAL, then=0),
+        When(severity=Anomaly.Severity.HIGH, then=1),
+        When(severity=Anomaly.Severity.MEDIUM, then=2),
+        default=3,
+        output_field=IntegerField(),
+    )
+    monthly_rows = (
+        Anomaly.objects.annotate(month=TruncMonth("date"), severity_rank=severity_rank)
+        .values("month", "account__provider", "service")
+        .annotate(
+            spike_count=Count("id"),
+            total_excess=Sum(F("actual_amount") - F("expected_amount")),
+            worst_severity_rank=Min("severity_rank"),
+        )
+        .order_by("-month", "-total_excess")
+    )
+    severity_labels = {0: "critical", 1: "high", 2: "medium", 3: "low"}
+    monthly_cost_spikes = [
+        {
+            "month": row["month"].strftime("%Y-%m"),
+            "provider": row["account__provider"],
+            "service": row["service"],
+            "spike_count": row["spike_count"],
+            "total_excess_amount": float(row["total_excess"] or 0),
+            "worst_severity": severity_labels[row["worst_severity_rank"]],
+        }
+        for row in monthly_rows
+    ]
+
+    priority_rank = Case(
+        When(priority=Recommendation.Priority.HIGH, then=0),
+        When(priority=Recommendation.Priority.MEDIUM, then=1),
+        default=2,
+        output_field=IntegerField(),
+    )
     recommendations = RecommendationSerializer(
         Recommendation.objects.select_related("account")
         .filter(status=Recommendation.Status.PENDING)
-        .order_by("-estimated_monthly_savings")[:20],
+        .annotate(priority_rank=priority_rank)
+        .order_by("priority_rank", "-estimated_monthly_savings")[:20],
         many=True,
     ).data
 
-    total_potential_savings = float(
-        Recommendation.objects.filter(status=Recommendation.Status.PENDING)
-        .aggregate(total=Sum("estimated_monthly_savings"))["total"]
-        or 0
+    pending_savings_totals = Recommendation.objects.filter(
+        status=Recommendation.Status.PENDING
+    ).aggregate(
+        monthly=Sum("estimated_monthly_savings"),
+        annual=Sum("estimated_annual_savings"),
     )
+    total_potential_savings = float(pending_savings_totals["monthly"] or 0)
+    total_potential_annual_savings = float(pending_savings_totals["annual"] or 0)
 
     forecast_rows = (
         Forecast.objects.filter(date__gte=today)
@@ -207,10 +252,12 @@ def _dashboard_view(request):
     payload = {
         "total_spend_30d": total_spend_30d,
         "total_potential_monthly_savings": total_potential_savings,
+        "total_potential_annual_savings": total_potential_annual_savings,
         "spend_by_provider": spend_by_provider,
         "daily_trend": daily_trend,
         "forecast_series": forecast_series,
         "anomalies": anomalies,
+        "monthly_cost_spikes": monthly_cost_spikes,
         "recommendations": recommendations,
         "last_analysis_run": AnalysisRunSerializer(last_run).data if last_run else None,
         "account_count": CloudAccount.objects.filter(is_active=True).count(),

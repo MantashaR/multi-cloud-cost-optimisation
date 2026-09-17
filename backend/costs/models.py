@@ -101,6 +101,11 @@ class Recommendation(models.Model):
         DOWNSIZE = "downsize", "Downsize"
         TERMINATE = "terminate", "Terminate idle resource"
 
+    class Priority(models.TextChoices):
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+
     account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="recommendations")
     service = models.CharField(max_length=120)
     resource_id = models.CharField(max_length=120)
@@ -111,7 +116,13 @@ class Recommendation(models.Model):
     avg_utilization_pct = models.FloatField(null=True, blank=True)
     current_monthly_cost = models.DecimalField(max_digits=12, decimal_places=2)
     estimated_monthly_savings = models.DecimalField(max_digits=12, decimal_places=2)
+    estimated_annual_savings = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     estimated_savings_pct = models.FloatField()
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    projected_utilization_pct = models.FloatField(
+        null=True, blank=True,
+        help_text="Utilisation the resource would run at after applying this recommendation",
+    )
     rationale = models.TextField(blank=True, default="")
     terraform_script = models.TextField(blank=True, default="")
     terraform_file_path = models.CharField(max_length=255, blank=True, default="")
@@ -120,6 +131,8 @@ class Recommendation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Priority is a derived display label (see rightsizing.py); ordering
+        # by savings amount is what actually matters for ranking impact.
         ordering = ["-estimated_monthly_savings"]
         unique_together = ("account", "resource_id")
 

@@ -42,8 +42,8 @@ GCP_COMPUTE_FAMILY = [
     ("c2-standard-4", 0.418),
 ]
 
-# next_size_down() below just walks to the next tuple in a family list, so
-# every family must be sorted most- to least-expensive *globally*, not just
+# best_downsize() below walks tuples in a family list in order, so every
+# family must be sorted most- to least-expensive *globally*, not just
 # within its own sub-family (D/E/F, m5/c5/r5, n2/e2/c2, ...) -- otherwise
 # "downsizing" from the cheap end of one sub-family can land on the
 # expensive end of another and produce a negative "saving".
@@ -76,16 +76,46 @@ REGIONS_BY_PROVIDER = {
 }
 
 
-def next_size_down(provider: str, instance_type: str):
-    """Return (smaller_type, relative_cost, current_relative_cost) or None
-    if `instance_type` is already the smallest in its family."""
+# Utilisation we're comfortable a resource running at, right after resizing.
+# Sizing purely to "one step smaller" leaves easy savings on the table when a
+# resource is deeply idle (e.g. 10% utilised); sizing too aggressively risks
+# throttling. This ceiling is the standard FinOps rule of thumb: keep headroom
+# so a real traffic spike doesn't immediately saturate the box.
+RIGHTSIZING_SAFETY_CEILING_PCT = 75.0
+
+
+def best_downsize(provider: str, instance_type: str, avg_utilization_pct: float):
+    """Find the smallest (cheapest) instance type in `instance_type`'s family
+    that the workload can safely move to, instead of always recommending just
+    one size down.
+
+    Approximates each candidate's resulting utilisation by assuming compute
+    capacity scales with relative on-demand cost within a family (a
+    reasonable proxy in the absence of real vCPU/memory specs): moving to a
+    instance with half the relative cost roughly doubles utilisation for the
+    same workload. Walks from the current size downward and keeps the
+    smallest candidate whose *implied* utilisation still clears
+    `RIGHTSIZING_SAFETY_CEILING_PCT`, maximising savings without over-shrinking.
+
+    Returns (recommended_type, recommended_relative_cost, current_relative_cost,
+    projected_utilization_pct) or None if no safe smaller size exists.
+    """
     family = FAMILY_BY_PROVIDER.get(provider, [])
     types = [t for t, _ in family]
     costs = dict(family)
-    if instance_type not in types:
+    if instance_type not in types or not avg_utilization_pct:
         return None
+
     idx = types.index(instance_type)
-    if idx + 1 >= len(types):
-        return None
-    smaller_type = types[idx + 1]
-    return smaller_type, costs[smaller_type], costs[instance_type]
+    current_cost = costs[instance_type]
+
+    best = None
+    for candidate_type, candidate_cost in family[idx + 1:]:
+        projected_utilization = avg_utilization_pct * (current_cost / candidate_cost)
+        if projected_utilization > RIGHTSIZING_SAFETY_CEILING_PCT:
+            # Every candidate after this one is even smaller (even higher
+            # projected utilisation), so nothing further down is safe either.
+            break
+        best = (candidate_type, candidate_cost, current_cost, round(projected_utilization, 1))
+
+    return best

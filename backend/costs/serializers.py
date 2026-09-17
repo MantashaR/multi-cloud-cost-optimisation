@@ -55,8 +55,9 @@ class RecommendationSerializer(serializers.ModelSerializer):
         model = Recommendation
         fields = [
             "id", "account", "account_name", "provider", "service", "resource_id", "region",
-            "action", "current_instance_type", "recommended_instance_type",
-            "avg_utilization_pct", "current_monthly_cost", "estimated_monthly_savings",
+            "action", "priority", "current_instance_type", "recommended_instance_type",
+            "avg_utilization_pct", "projected_utilization_pct", "current_monthly_cost",
+            "estimated_monthly_savings", "estimated_annual_savings",
             "estimated_savings_pct", "rationale", "terraform_file_path", "status",
             "created_at", "updated_at",
         ]
