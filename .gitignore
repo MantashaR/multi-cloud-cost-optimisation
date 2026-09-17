@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.sqlite3
+.env
+venv/
+.venv/
+staticfiles/
+backend/generated_terraform/*.tf
+node_modules/
+dist/
+frontend/.vite/
+.DS_Store
+*.log
+celerybeat-schedule*
