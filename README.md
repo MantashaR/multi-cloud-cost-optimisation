@@ -19,11 +19,14 @@ scripts to right-size or decommission under-utilised resources.
   annual)
 - **React dashboard** with plain-language insights, spend trends, and
   drill-down tables
+- **Monitoring with Prometheus + Grafana** covering API health (uptime,
+  request rate, latency, errors, DB queries), analysis-run status, and the
+  FinOps numbers themselves, with alert rules for failures
 
 ## Tech stack
 
 Python, Django, Django REST Framework, PostgreSQL, Celery, Redis,
-scikit-learn, Prophet, Terraform, React, Docker Compose.
+scikit-learn, Prophet, Terraform, React, Docker Compose, Prometheus, Grafana.
 
 ## Running the project
 
@@ -50,8 +53,40 @@ right-sizing recommendations.
 
 Other useful URLs:
 - API: http://localhost:8000/api/dashboard/
+- Grafana monitoring dashboard: http://localhost:3000 (opens without login;
+  sign in as `admin` / `admin` to edit)
+- Prometheus: http://localhost:9090 (alerts at http://localhost:9090/alerts)
+- Raw metrics: http://localhost:8000/metrics
 - Django admin: http://localhost:8000/admin/ (create a superuser first with
   `docker compose exec backend python manage.py createsuperuser`)
+
+## Monitoring
+
+```
+Django API  --/metrics-->  Prometheus (scrapes every 15s)  -->  Grafana dashboard
+                                   |
+                                   +--> alert rules (monitoring/prometheus/alerts.yml)
+```
+
+The backend exposes Prometheus metrics at `/metrics`:
+
+- **Platform health** (via `django-prometheus`): request rate per endpoint,
+  p50/p95 latency, responses by HTTP status, database queries and errors.
+- **FinOps metrics** (`backend/costs/metrics.py`, read from the database on
+  each scrape): spend per provider over the last 30 days of billing data,
+  anomalies by severity, recommendations by status, potential monthly
+  savings, and the status, duration and time of the last analysis run.
+
+Grafana loads the **Cloud Cost Platform - Overview** dashboard automatically
+from `monitoring/grafana/dashboards/`. Prometheus evaluates these alerts:
+
+| Alert | Fires when |
+|---|---|
+| `BackendDown` | The API stops answering scrapes for 1 minute |
+| `HighErrorRate` | More than 5% of responses are 5xx for 5 minutes |
+| `SlowApi` | p95 latency is above 1 second for 5 minutes |
+| `AnalysisFailed` | The latest analysis run failed |
+| `AnalysisStale` | No successful analysis in 7 hours (the schedule is every 6) |
 
 To stop the project:
 ```bash

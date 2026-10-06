@@ -1,0 +1,46 @@
+groups:
+  - name: cloudcost-platform
+    rules:
+      - alert: BackendDown
+        expr: up{job="cloudcost-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Django API is not responding to Prometheus scrapes.
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]))
+            / sum(rate(django_http_responses_total_by_status_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of API responses are server errors (5xx).
+
+      - alert: SlowApi
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(django_http_requests_latency_seconds_by_view_method_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 95th percentile API latency is above 1 second.
+
+      - alert: AnalysisFailed
+        expr: cloudcost_analysis_last_run_success == 0
+        labels:
+          severity: warning
+        annotations:
+          summary: The most recent cost analysis run failed.
+
+      # Celery beat runs the pipeline every 6 hours.
+      - alert: AnalysisStale
+        expr: time() - cloudcost_analysis_last_success_timestamp_seconds > 7 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: No successful cost analysis in the last 7 hours.

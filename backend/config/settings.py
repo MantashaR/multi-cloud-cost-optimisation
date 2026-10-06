@@ -16,10 +16,12 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "django_prometheus",
     "costs",
 ]
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -28,6 +30,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -53,7 +56,7 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "django_prometheus.db.backends.postgresql",
         "NAME": os.environ.get("POSTGRES_DB", "cloudcost"),
         "USER": os.environ.get("POSTGRES_USER", "cloudcost"),
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "cloudcost"),
@@ -123,5 +126,12 @@ GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"
 ANOMALY_CONTAMINATION = float(os.environ.get("ANOMALY_CONTAMINATION", "0.05"))
 FORECAST_HORIZON_DAYS = int(os.environ.get("FORECAST_HORIZON_DAYS", "14"))
 RIGHTSIZING_UTILIZATION_THRESHOLD = float(os.environ.get("RIGHTSIZING_UTILIZATION_THRESHOLD", "35"))
+
+# --- Monitoring ----------------------------------------------------------------
+
+# gunicorn runs several workers; prometheus_client merges their metrics via
+# files in this directory. Only set for the web process (docker-compose.yml).
+if PROMETHEUS_MULTIPROC_DIR := os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+    os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
 
 GENERATED_TERRAFORM_DIR = BASE_DIR / "generated_terraform"
