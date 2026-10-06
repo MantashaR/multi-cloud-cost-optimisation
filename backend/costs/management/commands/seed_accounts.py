@@ -3,9 +3,9 @@ from django.core.management.base import BaseCommand
 from costs.models import CloudAccount
 
 DEMO_ACCOUNTS = [
-    ("aws", "HCL DBS - AWS Prod", "123456789012"),
-    ("azure", "HCL DBS - Azure Prod", "b1f2a3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d"),
-    ("gcp", "HCL DBS - GCP Prod", "hcl-dbs-gcp-prod"),
+    ("aws", "Demo Co - AWS Prod", "123456789012"),
+    ("azure", "Demo Co - Azure Prod", "b1f2a3c4-d5e6-4a7b-8c9d-0e1f2a3b4c5d"),
+    ("gcp", "Demo Co - GCP Prod", "hcl-dbs-gcp-prod"),
 ]
 
 
